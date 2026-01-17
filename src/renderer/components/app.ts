@@ -136,41 +136,44 @@ export class App {
 
         <!-- Main Layout -->
         <div class="main-layout">
-          <!-- Main Content -->
-          <div class="main-content">
-            <!-- Voice Channel Panel -->
-            <div class="voice-channel-panel">
-              <div class="panel-header">VOICE CHANNEL</div>
-              <form class="voice-channel-form" id="connect-form">
-                <div class="form-group">
-                  <input type="text" class="form-input" id="user-name" 
-                    placeholder="Your name" value="${this.userName}" ${this.isConnected ? 'disabled' : ''}>
+            <!-- Left Sidebar: Users & Channel -->
+            <div class="left-sidebar">
+                <!-- Voice Channel Panel -->
+                <div class="voice-channel-panel">
+                    <div class="panel-header">VOICE CHANNEL</div>
+                    <form class="voice-channel-form" id="connect-form">
+                        <div class="form-group">
+                            <input type="text" class="form-input" id="user-name" 
+                                placeholder="Your name" value="${this.userName}" ${this.isConnected ? 'disabled' : ''}>
+                        </div>
+                        <div class="form-group">
+                            <input type="text" class="form-input" id="room-name" 
+                                placeholder="lobby" value="${this.currentRoom}" ${this.isConnected ? 'disabled' : ''}>
+                        </div>
+                        <button type="submit" class="btn ${this.isConnected ? 'btn-danger' : 'btn-primary'}" id="connect-btn">
+                            ${this.isConnected ? 'DISCONNECT' : 'CONNECT'}
+                        </button>
+                    </form>
                 </div>
-                <div class="form-group">
-                  <input type="text" class="form-input" id="room-name" 
-                    placeholder="lobby" value="${this.currentRoom}" ${this.isConnected ? 'disabled' : ''}>
+
+                <!-- Connected Users Panel -->
+                <div class="connected-users-panel">
+                    <div class="panel-header">CONNECTED USERS</div>
+                    <div class="users-grid">
+                        ${this.participants.length === 0 ? `
+                            <div class="empty-state">
+                                ${ICONS.users}
+                                <p>No users connected</p>
+                            </div>
+                        ` : this.participants.map(p => this.renderUserCard(p)).join('')}
+                    </div>
                 </div>
-                <button type="submit" class="btn ${this.isConnected ? 'btn-danger' : 'btn-primary'}" id="connect-btn">
-                  ${this.isConnected ? 'DISCONNECT' : 'CONNECT'}
-                </button>
-              </form>
             </div>
 
-            <!-- Connected Users Panel -->
-            <div class="connected-users-panel">
-              <div class="panel-header">CONNECTED USERS</div>
-              ${this.renderVideoGrid()}
-              <div class="users-grid">
-                ${this.participants.length === 0 ? `
-                  <div class="empty-state">
-                    ${ICONS.users}
-                    <p>No users connected</p>
-                    <span class="subtitle">Join a room to start talking</span>
-                  </div>
-                ` : this.participants.map(p => this.renderUserCard(p)).join('')}
-              </div>
+            <!-- Center Content: Stream/Chat -->
+            <div class="center-content">
+                ${this.renderVideoGrid()}
             </div>
-          </div>
 
           <!-- Audio Controls Sidebar -->
           <div class="audio-sidebar">
@@ -318,10 +321,15 @@ export class App {
     return `
         <div class="video-grid single-view">
             <div class="video-container remote-video full-size">
-                <video id="video-display" autoplay playsinline></video>
+                <div class="video-wrapper">
+                  <video id="video-display" autoplay playsinline></video>
+                </div>
                 <div class="video-overlay">
                     <span>${name}'s Screen</span>
-                    <button class="btn btn-danger btn-xs" id="close-stream">CLOSE</button>
+                    <div class="video-controls">
+                        <button class="btn btn-secondary btn-xs" id="fullscreen-btn">FULL SCREEN</button>
+                        <button class="btn btn-danger btn-xs" id="close-stream">CLOSE</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -391,6 +399,20 @@ export class App {
     document.getElementById('close-stream')?.addEventListener('click', () => {
       this.watchingStreamId = null;
       this.updateParticipants();
+    });
+
+    // Full Screen button
+    document.getElementById('fullscreen-btn')?.addEventListener('click', () => {
+      const videoContainer = document.querySelector('.video-container.remote-video');
+      if (videoContainer) {
+        if (!document.fullscreenElement) {
+          videoContainer.requestFullscreen().catch(err => {
+            this.addLog(`Error attempting to enable full-screen mode: ${err.message}`, 'error');
+          });
+        } else {
+          document.exitFullscreen();
+        }
+      }
     });
   }
 
@@ -586,29 +608,28 @@ export class App {
   private updateParticipants(): void {
     this.participants = this.peerManager.getParticipants();
     const usersPanel = document.querySelector('.connected-users-panel');
+    const centerContent = document.querySelector('.center-content');
+
     if (usersPanel) {
-      const header = usersPanel.querySelector('.panel-header');
-      usersPanel.innerHTML = '';
-      if (header) usersPanel.appendChild(header.cloneNode(true));
+      // Update User List in Left Sidebar
+      const usersGrid = usersPanel.querySelector('.users-grid');
+      if (usersGrid) {
+        usersGrid.innerHTML = this.participants.length === 0 ? `
+                <div class="empty-state">
+                    ${ICONS.users}
+                    <p>No users connected</p>
+                </div>
+            ` : this.participants.map(p => this.renderUserCard(p)).join('');
+      }
+    }
 
-      usersPanel.insertAdjacentHTML('beforeend', this.renderVideoGrid());
-
-      const usersHtml = `
-        <div class="users-grid">
-            ${this.participants.length === 0 ? `
-              <div class="empty-state">
-                ${ICONS.users}
-                <p>No users connected</p>
-                <span class="subtitle">Join a room to start talking</span>
-              </div>
-            ` : this.participants.map(p => this.renderUserCard(p)).join('')}
-        </div>
-      `;
-
-      usersPanel.insertAdjacentHTML('beforeend', usersHtml);
-      this.postRender();
+    if (centerContent) {
+      // Update Center Content (Stream)
+      centerContent.innerHTML = this.renderVideoGrid();
+      this.postRender(); // Re-attach listeners for new elements
     }
   }
+
 
   private startAudioLevelMonitor(): void {
     this.audioLevelInterval = window.setInterval(() => {
