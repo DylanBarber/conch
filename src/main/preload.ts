@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return ipcRenderer.invoke(IPC_CHANNELS.SET_SETTINGS, settings);
     },
 
+    // Screen Sharing
+    getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
+
     // Platform info
     platform: process.platform,
 });
