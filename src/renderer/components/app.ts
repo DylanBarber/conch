@@ -392,7 +392,7 @@ export class App {
           await this.peerManager.getAudioProcessor().startLocalStream(this.settings?.audio.inputDeviceId);
         }
 
-        this.peerManager.getAudioProcessor().toggleInputTest(this.isTestingInput);
+        await this.peerManager.getAudioProcessor().toggleInputTest(this.isTestingInput);
 
         if (this.isTestingInput) {
           this.addLog('Input test started (Loopback ON)');

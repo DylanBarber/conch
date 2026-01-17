@@ -148,10 +148,20 @@ export class AudioProcessor {
         return Promise.reject(new Error('setSinkId not supported'));
     }
 
-    public toggleInputTest(enabled: boolean): void {
-        if (!this.gainNode || !this.audioContext) return;
+    public async toggleInputTest(enabled: boolean): Promise<void> {
+        if (!this.gainNode || !this.audioContext || !this.localStream) return;
+
+        const audioTrack = this.localStream.getAudioTracks()[0];
 
         if (enabled) {
+            // Disable Echo Cancellation during loopback to prevent self-cancellation/chopping
+            try {
+                await audioTrack.applyConstraints({ echoCancellation: false });
+                console.log('[AudioProcessor] Echo Cancellation disabled for loopback test');
+            } catch (err) {
+                console.warn('[AudioProcessor] Failed to disable Echo Cancellation for test:', err);
+            }
+
             // Connect gain node (post-processing) to destination for loopback
             this.gainNode.connect(this.audioContext.destination);
             this.isTestingInput = true;
@@ -162,6 +172,15 @@ export class AudioProcessor {
             } catch (e) {
                 // Ignore if not connected
             }
+
+            // Re-enable Echo Cancellation
+            try {
+                await audioTrack.applyConstraints({ echoCancellation: true });
+                console.log('[AudioProcessor] Echo Cancellation restored');
+            } catch (err) {
+                console.warn('[AudioProcessor] Failed to restore Echo Cancellation:', err);
+            }
+
             // Reconnect to analyser (disconnect removes all connections)
             this.gainNode.connect(this.analyserNode!);
             this.isTestingInput = false;
