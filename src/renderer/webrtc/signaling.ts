@@ -100,13 +100,17 @@ export class SignalingClient {
         }
     }
 
-    public joinRoom(roomId: string): void {
+    public joinRoom(roomId: string, initialState?: { isVideoOn: boolean, isMuted: boolean }): void {
         this.currentRoomId = roomId;
         this.send({
             type: 'join',
             roomId,
             from: this.userId!,
-            payload: { name: this.userName },
+            payload: { 
+                name: this.userName,
+                isVideoOn: initialState?.isVideoOn || false,
+                isMuted: initialState?.isMuted || false
+            },
         });
     }
 

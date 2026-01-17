@@ -57,18 +57,18 @@ export class PeerManager {
 
     private setupSignalingHandlers(): void {
         this.signaling.on('user-list', (msg) => {
-            const users = msg.payload as { id: string; name: string }[];
+            const users = msg.payload as { id: string; name: string, isVideoOn?: boolean, isMuted?: boolean }[];
             users.forEach(user => {
                 if (user.id !== this.signaling.getUserId()) {
-                    this.createPeerConnection(user.id, user.name, true);
+                    this.createPeerConnection(user.id, user.name, true, user.isVideoOn, user.isMuted);
                 }
             });
         });
 
         this.signaling.on('user-joined', (msg) => {
-            const { id, name } = msg.payload as { id: string; name: string };
+            const { id, name, isVideoOn, isMuted } = msg.payload as { id: string; name: string, isVideoOn?: boolean, isMuted?: boolean };
             if (id !== this.signaling.getUserId()) {
-                this.createPeerConnection(id, name, false);
+                this.createPeerConnection(id, name, false, isVideoOn, isMuted);
             }
         });
 
@@ -202,8 +202,11 @@ export class PeerManager {
             throw new Error(`Microphone error: ${error instanceof Error ? error.message : 'Could not access microphone'}`);
         }
 
-        // Join the room
-        this.signaling.joinRoom(roomId);
+        // Join the room with initial state
+        this.signaling.joinRoom(roomId, {
+            isVideoOn: this.localVideoOn,
+            isMuted: this.localMuted
+        });
     }
 
     public disconnect(): void {
@@ -228,7 +231,13 @@ export class PeerManager {
         this.eventHandlers.connectionStateChanged.forEach(handler => handler(false));
     }
 
-    private async createPeerConnection(peerId: string, peerName: string, initiator: boolean): Promise<void> {
+    private async createPeerConnection(
+        peerId: string, 
+        peerName: string, 
+        initiator: boolean, 
+        initialVideoState: boolean = false, 
+        initialMuteState: boolean = false
+    ): Promise<void> {
         const connection = new RTCPeerConnection(this.rtcConfig);
 
         // Create audio element for remote stream
@@ -244,8 +253,8 @@ export class PeerManager {
             name: peerName,
             connection,
             audioElement,
-            isMuted: false,
-            isVideoOn: false,
+            isMuted: initialMuteState,
+            isVideoOn: initialVideoState,
             audioLevel: 0,
         };
         this.peers.set(peerId, peer);

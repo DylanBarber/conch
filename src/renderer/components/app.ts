@@ -96,12 +96,20 @@ export class App {
       // Otherwise assume screen share.
       const p = this.participants.find(p => p.id === participantId);
       
-      if (p && p.isVideoOn && !this.activeCameraStreams.has(participantId)) {
-        this.activeCameraStreams.set(participantId, stream);
-        this.addLog(`Remote camera received from ${p.name}`);
-      } else {
-        this.activeScreenShares.set(participantId, stream);
-        this.addLog(`Remote screen share received from ${p ? p.name : participantId}`);
+      // If we already have a camera stream, this must be screen share
+      if (this.activeCameraStreams.has(participantId)) {
+         this.activeScreenShares.set(participantId, stream);
+         this.addLog(`Remote screen share received from ${p ? p.name : participantId}`);
+      } 
+      // If isVideoOn is true, it's the camera (or the first of two)
+      else if (p && p.isVideoOn) {
+         this.activeCameraStreams.set(participantId, stream);
+         this.addLog(`Remote camera received from ${p.name}`);
+      }
+      // Otherwise, assume screen share (or late camera)
+      else {
+         this.activeScreenShares.set(participantId, stream);
+         this.addLog(`Remote video received from ${p ? p.name : participantId} (classified as screen)`);
       }
       
       this.updateParticipants();
@@ -778,6 +786,17 @@ export class App {
   private updateParticipants(): void {
     this.participants = this.peerManager.getParticipants();
     
+    // Check for potential misclassification of video streams due to race conditions
+    this.participants.forEach(p => {
+        // If signal says Camera ON, but we have it in ScreenShares and NOT CameraStreams
+        if (p.isVideoOn && !this.activeCameraStreams.has(p.id) && this.activeScreenShares.has(p.id)) {
+             const stream = this.activeScreenShares.get(p.id);
+             this.activeScreenShares.delete(p.id);
+             this.activeCameraStreams.set(p.id, stream!);
+             this.addLog(`Reclassified stream as camera for ${p.name}`);
+        }
+    });
+
     // Update Sidebar
     const usersPanel = document.querySelector('.connected-users-panel .users-grid');
     if (usersPanel) {

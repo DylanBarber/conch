@@ -39,10 +39,13 @@ wss.on('connection', (ws) => {
                 case 'leave':
                     handleLeave();
                     break;
+                case 'mute-status':
+                case 'video-status':
+                    handleStatusUpdate(message);
+                    break;
                 case 'offer':
                 case 'answer':
                 case 'ice-candidate':
-                case 'mute-status':
                     relayMessage(message);
                     break;
                 default:
@@ -66,6 +69,8 @@ wss.on('connection', (ws) => {
         const roomId = message.roomId;
         peerId = message.from;
         peerName = message.payload?.name || 'Unknown';
+        const isVideoOn = message.payload?.isVideoOn || false;
+        const isMuted = message.payload?.isMuted || false;
         currentRoom = roomId;
 
         // Create room if it doesn't exist
@@ -78,11 +83,16 @@ wss.on('connection', (ws) => {
         // Get existing users list
         const existingUsers = [];
         room.forEach((user, odPeerid) => {
-            existingUsers.push({ id: odPeerid, name: user.name });
+            existingUsers.push({ 
+                id: odPeerid, 
+                name: user.name,
+                isVideoOn: user.isVideoOn,
+                isMuted: user.isMuted
+            });
         });
 
         // Add this user to the room
-        room.set(peerId, { ws, name: peerName });
+        room.set(peerId, { ws, name: peerName, isVideoOn, isMuted });
 
         console.log(`User ${peerName} (${peerId}) joined room ${roomId}. Room size: ${room.size}`);
 
@@ -96,8 +106,28 @@ wss.on('connection', (ws) => {
         broadcast(roomId, {
             type: 'user-joined',
             from: peerId,
-            payload: { id: peerId, name: peerName }
+            payload: { id: peerId, name: peerName, isVideoOn, isMuted }
         }, peerId);
+    }
+
+    function handleStatusUpdate(message) {
+        const roomId = message.roomId;
+        const fromId = message.from;
+        
+        if (roomId && rooms.has(roomId)) {
+            const room = rooms.get(roomId);
+            const user = room.get(fromId);
+            
+            if (user) {
+                if (message.type === 'mute-status') {
+                    user.isMuted = message.payload.isMuted;
+                } else if (message.type === 'video-status') {
+                    user.isVideoOn = message.payload.isVideoOn;
+                }
+            }
+        }
+        
+        relayMessage(message);
     }
 
     function handleLeave() {
