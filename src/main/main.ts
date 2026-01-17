@@ -49,19 +49,26 @@ function setupIpcHandlers(): void {
     });
 
     ipcMain.handle('get-screen-sources', async () => {
-        const sources = await desktopCapturer.getSources({
-            types: ['window', 'screen'],
-            thumbnailSize: { width: 300, height: 300 },
-            fetchWindowIcons: true
-        });
+        try {
+            console.log('[Main] Getting screen sources...');
+            const sources = await desktopCapturer.getSources({
+                types: ['window', 'screen'],
+                thumbnailSize: { width: 300, height: 300 },
+                fetchWindowIcons: true
+            });
+            console.log(`[Main] Found ${sources.length} screen sources`);
 
-        return sources.map(source => ({
-            id: source.id,
-            name: source.name,
-            thumbnail: source.thumbnail.toDataURL(),
-            display_id: source.display_id,
-            appIcon: source.appIcon ? source.appIcon.toDataURL() : null
-        }));
+            return sources.map(source => ({
+                id: source.id,
+                name: source.name,
+                thumbnail: source.thumbnail.toDataURL(),
+                display_id: source.display_id,
+                appIcon: source.appIcon ? source.appIcon.toDataURL() : null
+            }));
+        } catch (error) {
+            console.error('[Main] Failed to get screen sources:', error);
+            throw error;
+        }
     });
 }
 
