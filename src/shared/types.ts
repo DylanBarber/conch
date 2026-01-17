@@ -18,10 +18,21 @@ export interface ServerSettings {
     turnServers: TurnServer[];
 }
 
+export interface SavedServer {
+    name: string; // Nickname for the server entry
+    displayName: string; // User's nickname in this server
+    room: string;
+    signalingUrl: string;
+    turnUrl?: string;
+    turnUsername?: string;
+    turnCredential?: string;
+}
+
 export interface AppSettings {
     audio: AudioSettings;
     server: ServerSettings;
     user: UserSettings;
+    savedServers: SavedServer[];
 }
 
 export interface UserSettings {
@@ -95,4 +106,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
     user: {
         displayName: 'User',
     },
+    savedServers: [],
 };

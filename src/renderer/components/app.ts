@@ -1,9 +1,10 @@
 import { PeerManager } from '../webrtc/peer-manager';
 import { SettingsComponent } from './settings';
-import { AppSettings, Participant } from '../../shared/types';
+import { AppSettings, Participant, SavedServer } from '../../shared/types';
 import { AudioDevice } from '../webrtc/audio-processor';
 import { SoundManager } from '../webrtc/sound-manager';
 import { ScreenPickerComponent } from './screen-picker';
+import { ServerModalComponent } from './server-modal';
 
 // Icons
 const ICONS = {
@@ -18,6 +19,10 @@ const ICONS = {
   copy: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>`,
   trash: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>`,
   screen: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>`,
+  star: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>`,
+  plus: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>`,
+  disconnect: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>`,
+  edit: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>`,
 };
 
 export class App {
@@ -40,6 +45,7 @@ export class App {
   private settingsComponent: SettingsComponent | null = null;
   private soundManager: SoundManager;
   private screenPicker: ScreenPickerComponent;
+  private serverModal: ServerModalComponent | null = null;
   private isTestingInput = false;
   private isSharingScreen = false;
   private activeVideoStreams: Map<string, MediaStream> = new Map();
@@ -122,15 +128,15 @@ export class App {
               ${ICONS.logo}
               <h1>CONCH VOICE</h1>
             </div>
-            <span class="header-subtitle">NEURAL VOICE NETWORK // V2.0</span>
+            <div class="header-subtitle">NEURAL VOICE NETWORK // V2.0</div>
           </div>
           <div class="header-actions">
+            <!-- Header Disconnect Button Removed -->
             <div class="status-badge ${this.isConnected ? 'connected' : 'disconnected'}">
               ${this.isConnected ? 'CONNECTED' : 'DISCONNECTED'}
             </div>
             <button class="btn-icon" id="settings-btn" title="Settings">
               ${ICONS.settings}
-            </button>
           </div>
         </header>
 
@@ -139,21 +145,42 @@ export class App {
             <!-- Left Sidebar: Users & Channel -->
             <div class="left-sidebar">
                 <!-- Voice Channel Panel -->
-                <div class="voice-channel-panel">
-                    <div class="panel-header">VOICE CHANNEL</div>
-                    <form class="voice-channel-form" id="connect-form">
-                        <div class="form-group">
-                            <input type="text" class="form-input" id="user-name" 
-                                placeholder="Your name" value="${this.userName}" ${this.isConnected ? 'disabled' : ''}>
-                        </div>
-                        <div class="form-group">
-                            <input type="text" class="form-input" id="room-name" 
-                                placeholder="lobby" value="${this.currentRoom}" ${this.isConnected ? 'disabled' : ''}>
-                        </div>
-                        <button type="submit" class="btn ${this.isConnected ? 'btn-danger' : 'btn-primary'}" id="connect-btn">
-                            ${this.isConnected ? 'DISCONNECT' : 'CONNECT'}
-                        </button>
-                    </form>
+                <!-- Saved Servers Panel -->
+                <div class="saved-servers-panel">
+                    <div class="panel-header">SAVED SERVERS</div>
+                    <button class="btn btn-primary full-width" id="add-server-btn-main">
+                        ${ICONS.plus} ADD A SERVER
+                    </button>
+                    <div id="saved-servers-list">
+                        ${(this.settings?.savedServers || []).length === 0 ? `
+                            <div class="empty-state" style="padding: 10px;">
+                                <p style="font-size: 11px;">No saved servers</p>
+                            </div>
+                        ` : (this.settings?.savedServers || []).map((s, i) => {
+      const isConnectedToThis = this.isConnected &&
+        s.room === this.currentRoom &&
+        (!this.settings?.server.signalingUrl || s.signalingUrl === this.settings.server.signalingUrl);
+
+      return `
+                            <div class="saved-server-item">
+                                <div class="saved-server-info">
+                                    <span class="saved-server-name">${s.name}</span>
+                                    <span class="saved-server-room">${s.room}</span>
+                                </div>
+                                <div class="saved-server-actions">
+                                    <button class="btn ${isConnectedToThis ? 'btn-danger' : 'btn-primary'} btn-xs connect-server-btn" 
+                                            data-index="${i}"
+                                            data-action="${isConnectedToThis ? 'disconnect' : 'connect'}">
+                                        ${isConnectedToThis ? 'DISCONNECT' : 'CONNECT'}
+                                    </button>
+                                    <button class="btn-icon edit-server-btn" data-index="${i}" title="Edit Server">
+                                        ${ICONS.edit}
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+    }).join('')}
+                    </div>
                 </div>
 
                 <!-- Connected Users Panel -->
@@ -304,7 +331,9 @@ export class App {
         </div>
 
         <!-- Settings Container -->
+        <!-- Settings & Modals -->
         <div id="settings-container"></div>
+        <div id="server-modal-container"></div>
       </div>
     `;
 
@@ -427,14 +456,7 @@ export class App {
 
   private attachEventListeners(): void {
     // Connect form
-    document.getElementById('connect-form')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      if (this.isConnected) {
-        this.disconnect();
-      } else {
-        this.connect();
-      }
-    });
+    // Disconnect Button (Header) - Removed
 
     // Mic toggle
     document.getElementById('mic-toggle')?.addEventListener('click', () => {
@@ -566,6 +588,42 @@ export class App {
       this.render();
     });
 
+    document.getElementById('add-server-btn-main')?.addEventListener('click', () => {
+      this.openServerModal();
+    });
+
+    // Connect/Disconnect Button Logic
+    document.querySelectorAll('.connect-server-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const el = e.currentTarget as HTMLElement;
+        const index = parseInt(el.dataset.index || '0');
+        const action = el.dataset.action;
+
+        if (action === 'disconnect') {
+          this.disconnect();
+          return;
+        }
+
+        const server = this.settings?.savedServers?.[index];
+        if (server) {
+          await this.connectToSavedServer(server);
+        }
+      });
+    });
+
+    document.querySelectorAll('.edit-server-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const el = e.currentTarget as HTMLElement;
+        const index = parseInt(el.dataset.index || '0');
+        const server = this.settings?.savedServers?.[index];
+        if (server) {
+          this.openServerModal(server, index);
+        }
+      });
+    });
+
     // Settings
     document.getElementById('settings-btn')?.addEventListener('click', () => {
       this.openSettings();
@@ -573,11 +631,12 @@ export class App {
   }
 
   private async connect(): Promise<void> {
-    const userNameInput = document.getElementById('user-name') as HTMLInputElement;
-    const roomNameInput = document.getElementById('room-name') as HTMLInputElement;
+    // We don't have inputs anymore, so we use current state properties
+    // this.userName and this.currentRoom should be set by connectToSavedServer
+    // or loaded from settings init.
 
-    this.userName = userNameInput?.value.trim() || 'User';
-    this.currentRoom = roomNameInput?.value.trim() || 'lobby';
+    this.currentRoom = this.currentRoom || 'lobby';
+    this.userName = this.userName || 'User';
 
     if (!this.settings) return;
 
@@ -693,5 +752,76 @@ export class App {
       }
     );
     this.settingsComponent.render();
+  }
+  private openServerModal(existing?: SavedServer, index?: number): void {
+    const container = document.getElementById('server-modal-container');
+    if (!container) return;
+
+    this.serverModal = new ServerModalComponent(
+      container,
+      {
+        onSave: async (server) => {
+          if (!this.settings) return;
+          const saved = this.settings.savedServers || [];
+          if (typeof index === 'number') {
+            saved[index] = server;
+          } else {
+            saved.push(server);
+          }
+          const newSettings = { ...this.settings, savedServers: saved };
+          this.settings = newSettings;
+          await window.electronAPI.setSettings(newSettings);
+          this.addLog(`Server ${typeof index === 'number' ? 'updated' : 'saved'}: ${server.name}`);
+          this.render();
+          this.serverModal = null;
+        },
+        onDelete: async () => {
+          if (!this.settings || typeof index !== 'number') return;
+          const saved = this.settings.savedServers || [];
+          saved.splice(index, 1);
+          const newSettings = { ...this.settings, savedServers: saved };
+          this.settings = newSettings;
+          await window.electronAPI.setSettings(newSettings);
+          this.addLog('Server deleted');
+          this.render();
+          this.serverModal = null;
+        },
+        onClose: () => {
+          this.serverModal = null;
+        }
+      },
+      existing
+    );
+    this.serverModal.render();
+  }
+
+  private async connectToSavedServer(server: SavedServer): Promise<void> {
+    if (this.isConnected) {
+      this.disconnect();
+    }
+
+    if (!this.settings) return;
+
+    const newSettings = { ...this.settings };
+    newSettings.server.signalingUrl = server.signalingUrl;
+    newSettings.user.displayName = server.displayName;
+
+    if (server.turnUrl) {
+      newSettings.server.turnServers = [{
+        urls: server.turnUrl,
+        username: server.turnUsername,
+        credential: server.turnCredential
+      }];
+    }
+
+    this.settings = newSettings;
+    await window.electronAPI.setSettings(newSettings);
+
+    // Update inputs (if we still had them, but we don't. Just update state)
+    this.currentRoom = server.room;
+    this.userName = server.displayName;
+
+    this.addLog(`Connecting to saved server: ${server.name}...`);
+    this.connect();
   }
 }
