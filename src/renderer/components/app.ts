@@ -43,6 +43,7 @@ export class App {
   private isTestingInput = false;
   private isSharingScreen = false;
   private activeVideoStreams: Map<string, MediaStream> = new Map();
+  private watchingStreamId: string | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -80,9 +81,12 @@ export class App {
       this.activeVideoStreams.set(participantId, stream);
       this.addLog(`Remote video received from participant ${participantId.substring(0, 6)}...`);
       this.render();
-      // Handle stream ending?
+
       stream.onremovetrack = () => {
         this.activeVideoStreams.delete(participantId);
+        if (this.watchingStreamId === participantId) {
+          this.watchingStreamId = null;
+        }
         this.render();
       };
     });
@@ -302,44 +306,44 @@ export class App {
   }
 
   private renderVideoGrid(): string {
-    const videos = [];
+    // Only show if we are watching a specific stream
+    if (!this.watchingStreamId) return '';
 
-    // Local screen share video
-    if (this.isSharingScreen) {
-      videos.push(`
-            <div class="video-container local-screen">
-                <video id="local-screen-video" autoplay muted playsinline></video>
-                <div class="video-label">Your Screen</div>
-            </div>
-        `);
-    }
+    const stream = this.activeVideoStreams.get(this.watchingStreamId);
+    if (!stream) return '';
 
-    // Remote video streams
-    this.activeVideoStreams.forEach((stream, participantId) => {
-      const participant = this.participants.find(p => p.id === participantId);
-      if (participant) {
-        videos.push(`
-                <div class="video-container remote-video">
-                    <video id="video-${participantId}" autoplay playsinline></video>
-                    <div class="video-label">${participant.name}'s Screen</div>
+    const participant = this.participants.find(p => p.id === this.watchingStreamId);
+    const name = participant ? participant.name : 'Unknown User';
+
+    return `
+        <div class="video-grid single-view">
+            <div class="video-container remote-video full-size">
+                <video id="video-display" autoplay playsinline></video>
+                <div class="video-overlay">
+                    <span>${name}'s Screen</span>
+                    <button class="btn btn-danger btn-xs" id="close-stream">CLOSE</button>
                 </div>
-            `);
-      }
-    });
-
-    if (videos.length === 0) {
-      return ''; // No videos to display
-    }
-
-    return `<div class="video-grid">${videos.join('')}</div>`;
+            </div>
+        </div>
+    `;
   }
 
   private renderUserCard(p: Participant): string {
+    const isStreaming = this.activeVideoStreams.has(p.id);
+    const isWatcher = this.watchingStreamId === p.id;
+
     return `
       <div class="user-card ${p.isSpeaking ? 'speaking' : ''}">
         <div class="user-avatar">${this.getInitials(p.name)}</div>
         <div class="user-info">
-          <div class="user-name">${p.name}</div>
+          <div class="user-name">
+            ${p.name}
+            ${isStreaming ? `
+                <button class="btn btn-xs ${isWatcher ? 'btn-danger' : 'btn-primary'} watch-stream-btn" data-id="${p.id}">
+                    ${ICONS.screen} ${isWatcher ? 'STOP WATCHING' : 'WATCH STREAM'}
+                </button>
+            ` : ''}
+          </div>
           <div class="user-status ${p.isMuted ? 'muted' : ''}">
             ${p.isMuted ? 'Muted' : (p.isSpeaking ? 'Speaking' : 'Connected')}
           </div>
@@ -357,20 +361,36 @@ export class App {
   }
 
   private postRender() {
-    // Attach video streams to elements
-    if (this.isSharingScreen) {
-      const video = document.getElementById('local-screen-video') as HTMLVideoElement;
-      const stream = this.peerManager.getLocalScreenStream();
+    // Attach video stream if watching
+    if (this.watchingStreamId) {
+      const stream = this.activeVideoStreams.get(this.watchingStreamId);
+      const video = document.getElementById('video-display') as HTMLVideoElement;
       if (video && stream) {
         video.srcObject = stream;
       }
     }
 
-    this.activeVideoStreams.forEach((stream, id) => {
-      const video = document.getElementById(`video-${id}`) as HTMLVideoElement;
-      if (video) {
-        video.srcObject = stream;
-      }
+    // Re-attach listeners for dynamic buttons
+    // Watch/Stop Watch buttons
+    document.querySelectorAll('.watch-stream-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // prevent card click
+        const id = (e.currentTarget as HTMLElement).dataset.id;
+        if (id) {
+          if (this.watchingStreamId === id) {
+            this.watchingStreamId = null;
+          } else {
+            this.watchingStreamId = id;
+          }
+          this.updateParticipants(); // Re-render users/grid
+        }
+      });
+    });
+
+    // Close stream button
+    document.getElementById('close-stream')?.addEventListener('click', () => {
+      this.watchingStreamId = null;
+      this.updateParticipants();
     });
   }
 

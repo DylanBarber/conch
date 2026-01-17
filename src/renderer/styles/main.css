@@ -907,6 +907,12 @@ body {
     min-height: 0;
 }
 
+.video-grid.single-view {
+    grid-template-columns: 1fr;
+    max-height: 50vh;
+    /* Don't take up too much vertical space */
+}
+
 .video-container {
     background: black;
     border-radius: var(--radius-lg);
@@ -914,6 +920,10 @@ body {
     position: relative;
     aspect-ratio: 16/9;
     border: 1px solid var(--color-border);
+}
+
+.video-container.full-size {
+    height: 100%;
 }
 
 .video-container video {
@@ -931,4 +941,13 @@ body {
     background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
     color: white;
     font-size: var(--font-size-sm);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.btn-xs {
+    padding: 2px 6px;
+    font-size: 10px;
+    min-height: 20px;
 }
