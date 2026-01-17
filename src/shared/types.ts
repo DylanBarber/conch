@@ -51,6 +51,7 @@ export interface Participant {
     id: string;
     name: string;
     isMuted: boolean;
+    isVideoOn: boolean;
     isSpeaking: boolean;
     audioLevel: number;
 }
@@ -70,7 +71,8 @@ export type SignalingMessageType =
     | 'user-list'
     | 'user-joined'
     | 'user-left'
-    | 'mute-status';
+    | 'mute-status'
+    | 'video-status';
 
 export interface SignalingMessage {
     type: SignalingMessageType;

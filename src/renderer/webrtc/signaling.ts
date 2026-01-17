@@ -160,6 +160,15 @@ export class SignalingClient {
         });
     }
 
+    public sendVideoStatus(isVideoOn: boolean): void {
+        this.send({
+            type: 'video-status',
+            from: this.userId!,
+            roomId: this.currentRoomId!,
+            payload: { isVideoOn },
+        });
+    }
+
     private send(message: SignalingMessage): void {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify(message));

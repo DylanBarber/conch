@@ -6,12 +6,15 @@ const ICONS = {
     phoneOff: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.28 3H5z" /></svg>`,
     settings: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>`,
     users: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>`,
+    video: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>`,
+    videoOff: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18" /></svg>`
 };
 
 import { Participant } from '../../shared/types';
 
 export interface ChatRoomCallbacks {
     onMuteToggle: (muted: boolean) => void;
+    onVideoToggle: (enabled: boolean) => void;
     onDeafenToggle: (deafened: boolean) => void;
     onDisconnect: () => void;
     onSettingsOpen: () => void;
@@ -21,6 +24,7 @@ export class ChatRoomComponent {
     private container: HTMLElement;
     private participants: Participant[] = [];
     private isMuted = false;
+    private isVideoOn = false;
     private isDeafened = false;
     private callbacks: ChatRoomCallbacks;
     private roomName: string = '';
@@ -44,6 +48,11 @@ export class ChatRoomComponent {
         this.updateMuteButton();
     }
 
+    public setVideoEnabled(enabled: boolean): void {
+        this.isVideoOn = enabled;
+        this.updateVideoButton();
+    }
+
     public render(): void {
         this.container.innerHTML = `
       <div class="chat-room fade-in">
@@ -61,6 +70,9 @@ export class ChatRoomComponent {
       <div class="controls-bar">
         <button class="control-btn ${this.isMuted ? 'active' : ''}" id="mute-btn" title="${this.isMuted ? 'Unmute' : 'Mute'}">
           ${this.isMuted ? ICONS.micOff : ICONS.mic}
+        </button>
+        <button class="control-btn ${this.isVideoOn ? 'active' : ''}" id="video-btn" title="${this.isVideoOn ? 'Stop Video' : 'Start Video'}">
+          ${this.isVideoOn ? ICONS.video : ICONS.videoOff}
         </button>
         <button class="control-btn ${this.isDeafened ? 'active' : ''}" id="deafen-btn" title="${this.isDeafened ? 'Undeafen' : 'Deafen'}">
           ${ICONS.headphones}
@@ -89,7 +101,10 @@ export class ChatRoomComponent {
 
         return this.participants.map(p => `
       <div class="participant-card ${p.isSpeaking ? 'speaking' : ''}" data-id="${p.id}">
-        <div class="participant-avatar">
+        <div class="participant-video-container" id="video-container-${p.id}" style="${p.isVideoOn ? 'display: block;' : 'display: none;'}">
+          <video id="video-${p.id}" autoplay playsinline muted="${p.name === 'You' ? 'true' : 'false'}"></video>
+        </div>
+        <div class="participant-avatar" style="${p.isVideoOn ? 'display: none;' : ''}">
           <div class="audio-ring"></div>
           <div class="avatar-circle">${this.getInitials(p.name)}</div>
         </div>
@@ -112,6 +127,26 @@ export class ChatRoomComponent {
     private renderParticipants(): void {
         const grid = document.getElementById('participants-grid');
         if (grid) {
+            // Re-render only if the structure needs changing, or update efficiently. 
+            // For now, simple re-render. Note: this will detach video elements.
+            // We need to preserve video elements or re-attach them.
+            // A better approach would be to diff or only update status/classes.
+            // For simplicity in this iteration, I'll re-render and rely on the index.ts or parent to re-attach streams.
+            // However, that might be flickery. 
+            // Let's implement a smarter update where we check if card exists.
+            
+            this.participants.forEach(p => {
+                let card = document.getElementById(`participant-card-${p.id}`);
+                if (!card) {
+                    // Create new card
+                    // But we are using template strings for the whole grid above. 
+                    // Let's stick to full re-render for now, but provide a way to get video elements.
+                }
+            });
+
+            // Fallback: Full re-render. 
+            // IMPORTANT: If we full re-render, we lose the srcObject on video tags.
+            // The parent component needs to know when to re-attach streams.
             grid.innerHTML = this.renderParticipantCards();
         }
 
@@ -131,11 +166,26 @@ export class ChatRoomComponent {
         }
     }
 
+    private updateVideoButton(): void {
+        const videoBtn = document.getElementById('video-btn');
+        if (videoBtn) {
+            videoBtn.className = `control-btn ${this.isVideoOn ? 'active' : ''}`;
+            videoBtn.innerHTML = this.isVideoOn ? ICONS.video : ICONS.videoOff;
+            videoBtn.title = this.isVideoOn ? 'Stop Video' : 'Start Video';
+        }
+    }
+
     private attachEventListeners(): void {
         document.getElementById('mute-btn')?.addEventListener('click', () => {
             this.isMuted = !this.isMuted;
             this.updateMuteButton();
             this.callbacks.onMuteToggle(this.isMuted);
+        });
+
+        document.getElementById('video-btn')?.addEventListener('click', () => {
+            this.isVideoOn = !this.isVideoOn;
+            this.updateVideoButton();
+            this.callbacks.onVideoToggle(this.isVideoOn);
         });
 
         document.getElementById('deafen-btn')?.addEventListener('click', () => {
@@ -158,5 +208,9 @@ export class ChatRoomComponent {
 
     public destroy(): void {
         this.container.innerHTML = '';
+    }
+
+    public getVideoElement(participantId: string): HTMLVideoElement | null {
+        return document.getElementById(`video-${participantId}`) as HTMLVideoElement;
     }
 }

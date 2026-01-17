@@ -12,6 +12,8 @@ const ICONS = {
   settings: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>`,
   mic: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>`,
   micOff: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>`,
+  video: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>`,
+  videoOff: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18" /></svg>`,
   refresh: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>`,
   speaker: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>`,
   users: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>`,
@@ -33,6 +35,7 @@ export class App {
 
   private isConnected = false;
   private isMuted = false;
+  private isVideoOn = false;
   private currentRoom = '';
   private userName = '';
   private micGain = 100;
@@ -48,7 +51,8 @@ export class App {
   private serverModal: ServerModalComponent | null = null;
   private isTestingInput = false;
   private isSharingScreen = false;
-  private activeVideoStreams: Map<string, MediaStream> = new Map();
+  private activeScreenShares: Map<string, MediaStream> = new Map();
+  private activeCameraStreams: Map<string, MediaStream> = new Map();
   private watchingStreamId: string | null = null;
 
   constructor(container: HTMLElement) {
@@ -77,19 +81,38 @@ export class App {
       } else if (this.isConnected) {
         this.isConnected = false;
         this.isSharingScreen = false;
-        this.activeVideoStreams.clear();
+        this.isVideoOn = false;
+        this.activeScreenShares.clear();
+        this.activeCameraStreams.clear();
         this.soundManager.playDisconnectSound();
         this.addLog('// Disconnected from server', 'error');
         this.render();
       }
     });
     this.peerManager.on('remoteTrackAdded', (participantId, stream) => {
-      this.activeVideoStreams.set(participantId, stream);
-      this.addLog(`Remote video received from participant ${participantId.substring(0, 6)}...`);
+      // Determine if this is a camera or screen share
+      // We use a simple heuristic: if the participant has isVideoOn=true, 
+      // and we don't have a camera stream for them yet, assume it's camera.
+      // Otherwise assume screen share.
+      const p = this.participants.find(p => p.id === participantId);
+      
+      if (p && p.isVideoOn && !this.activeCameraStreams.has(participantId)) {
+        this.activeCameraStreams.set(participantId, stream);
+        this.addLog(`Remote camera received from ${p.name}`);
+      } else {
+        this.activeScreenShares.set(participantId, stream);
+        this.addLog(`Remote screen share received from ${p ? p.name : participantId}`);
+      }
+      
       this.render();
 
       stream.onremovetrack = () => {
-        this.activeVideoStreams.delete(participantId);
+        if (this.activeCameraStreams.get(participantId) === stream) {
+            this.activeCameraStreams.delete(participantId);
+        } else if (this.activeScreenShares.get(participantId) === stream) {
+            this.activeScreenShares.delete(participantId);
+        }
+        
         if (this.watchingStreamId === participantId) {
           this.watchingStreamId = null;
         }
@@ -137,6 +160,7 @@ export class App {
             </div>
             <button class="btn-icon" id="settings-btn" title="Settings">
               ${ICONS.settings}
+            </button>
           </div>
         </header>
 
@@ -212,14 +236,24 @@ export class App {
           <!-- Audio Controls Sidebar -->
           <div class="audio-sidebar">
             <div class="sidebar-section">
-              <div class="sidebar-section-title">AUDIO CONTROLS</div>
+              <div class="sidebar-section-title">CONTROLS</div>
               
-              <!-- Mic Button -->
-              <div class="mic-button-container">
-                <button class="mic-button ${this.isMuted ? 'muted' : ''}" id="mic-toggle">
-                  ${this.isMuted ? ICONS.micOff : ICONS.mic}
-                </button>
-                <span class="mic-label">${this.isMuted ? 'MUTED' : 'LIVE'}</span>
+              <div class="controls-row" style="display: flex; gap: 10px;">
+                  <!-- Mic Button -->
+                  <div class="mic-button-container">
+                    <button class="mic-button ${this.isMuted ? 'muted' : ''}" id="mic-toggle">
+                      ${this.isMuted ? ICONS.micOff : ICONS.mic}
+                    </button>
+                    <span class="mic-label">${this.isMuted ? 'MUTED' : 'LIVE'}</span>
+                  </div>
+
+                  <!-- Video Button -->
+                  <div class="mic-button-container">
+                    <button class="mic-button ${this.isVideoOn ? 'active' : 'muted'}" id="video-toggle" style="${this.isVideoOn ? 'background: #00d4aa; color: #000;' : ''}">
+                      ${this.isVideoOn ? ICONS.video : ICONS.videoOff}
+                    </button>
+                    <span class="mic-label">${this.isVideoOn ? 'VIDEO ON' : 'VIDEO OFF'}</span>
+                  </div>
               </div>
             </div>
 
@@ -313,10 +347,6 @@ export class App {
               <span>Room:</span>
               <span>${this.currentRoom || '---'}</span>
             </div>
-            <div class="status-item">
-              <span>Latency:</span>
-              <span>---</span>
-            </div>
           </div>
           <div class="log-actions">
             <button class="btn btn-sm" id="copy-log">${ICONS.copy} Copy</button>
@@ -331,7 +361,6 @@ export class App {
         </div>
 
         <!-- Settings Container -->
-        <!-- Settings & Modals -->
         <div id="settings-container"></div>
         <div id="server-modal-container"></div>
       </div>
@@ -342,10 +371,10 @@ export class App {
   }
 
   private renderVideoGrid(): string {
-    // Only show if we are watching a specific stream
+    // Only show if we are watching a specific stream (Screen Share)
     if (!this.watchingStreamId) return '';
 
-    const stream = this.activeVideoStreams.get(this.watchingStreamId);
+    const stream = this.activeScreenShares.get(this.watchingStreamId);
     if (!stream) return '';
 
     const participant = this.participants.find(p => p.id === this.watchingStreamId);
@@ -370,16 +399,24 @@ export class App {
   }
 
   private renderUserCard(p: Participant): string {
-    const isStreaming = this.activeVideoStreams.has(p.id);
+    const isSharingScreen = this.activeScreenShares.has(p.id);
     const isWatcher = this.watchingStreamId === p.id;
+    const hasCamera = this.activeCameraStreams.has(p.id) || (p.name === 'You' && this.isVideoOn);
 
     return `
       <div class="user-card ${p.isSpeaking ? 'speaking' : ''}">
-        <div class="user-avatar">${this.getInitials(p.name)}</div>
+        ${hasCamera ? `
+          <div class="user-video-container">
+             <video id="user-video-${p.id}" class="user-video" autoplay playsinline muted="${p.name === 'You' ? 'true' : 'false'}" style="width: 100%; height: 100%; object-fit: cover;"></video>
+          </div>
+        ` : `
+          <div class="user-avatar">${this.getInitials(p.name)}</div>
+        `}
+        
         <div class="user-info">
           <div class="user-name">
             ${p.name}
-            ${isStreaming ? `
+            ${isSharingScreen ? `
                 <button class="btn btn-xs ${isWatcher ? 'btn-danger' : 'btn-primary'} watch-stream-btn" data-id="${p.id}">
                     ${ICONS.screen} ${isWatcher ? 'STOP WATCHING' : 'WATCH STREAM'}
                 </button>
@@ -402,14 +439,32 @@ export class App {
   }
 
   private postRender() {
-    // Attach video stream if watching
+    // Attach screen share stream if watching
     if (this.watchingStreamId) {
-      const stream = this.activeVideoStreams.get(this.watchingStreamId);
+      const stream = this.activeScreenShares.get(this.watchingStreamId);
       const video = document.getElementById('video-display') as HTMLVideoElement;
       if (video && stream) {
         video.srcObject = stream;
       }
     }
+
+    // Attach camera streams
+    this.participants.forEach(p => {
+        const videoEl = document.getElementById(`user-video-${p.id}`) as HTMLVideoElement;
+        if (videoEl) {
+            if (p.name === 'You' && this.isVideoOn) {
+                const stream = this.peerManager.getLocalCameraStream();
+                if (stream) {
+                    videoEl.srcObject = stream;
+                }
+            } else if (this.activeCameraStreams.has(p.id)) {
+                const stream = this.activeCameraStreams.get(p.id);
+                if (stream) {
+                    videoEl.srcObject = stream;
+                }
+            }
+        }
+    });
 
     // Re-attach listeners for dynamic buttons
     // Watch/Stop Watch buttons
@@ -464,6 +519,20 @@ export class App {
       this.peerManager.setMuted(this.isMuted);
       this.addLog(`Microphone ${this.isMuted ? 'muted' : 'unmuted'}`);
       this.render();
+    });
+
+    // Video toggle
+    document.getElementById('video-toggle')?.addEventListener('click', async () => {
+        try {
+            this.isVideoOn = !this.isVideoOn;
+            await this.peerManager.setVideoEnabled(this.isVideoOn);
+            this.addLog(`Video ${this.isVideoOn ? 'started' : 'stopped'}`);
+            this.render();
+        } catch (error) {
+            this.isVideoOn = !this.isVideoOn; // Revert
+            this.addLog(`Failed to toggle video: ${error}`, 'error');
+            this.render();
+        }
     });
 
     // Mic gain slider
@@ -570,7 +639,7 @@ export class App {
             this.render();
           }
         } catch (error) {
-          this.addLog(`Failed to share screen: ${error}`, 'error');
+            this.addLog(`Failed to share screen: ${error}`, 'error');
         }
       }
     });
@@ -663,7 +732,12 @@ export class App {
   private disconnect(): void {
     this.peerManager.disconnect();
     this.isConnected = false;
+    this.isVideoOn = false;
+    this.isSharingScreen = false;
     this.participants = [];
+    this.activeScreenShares.clear();
+    this.activeCameraStreams.clear();
+    this.watchingStreamId = null;
     this.addLog('Disconnected from server');
     this.render();
   }
@@ -694,6 +768,9 @@ export class App {
         this.postRender(); // Re-attach listeners for new elements
       }
     }
+    
+    // Also re-attach video elements in sidebar if needed (postRender handles both)
+    this.postRender();
   }
 
 

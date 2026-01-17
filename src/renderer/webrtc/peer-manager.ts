@@ -8,9 +8,12 @@ interface PeerConnection {
     name: string;
     connection: RTCPeerConnection;
     audioElement: HTMLAudioElement;
+    videoElement?: HTMLVideoElement;
     isMuted: boolean;
+    isVideoOn: boolean;
     audioLevel: number;
-    videoSender?: RTCRtpSender; // Track the video sender for removal
+    cameraSender?: RTCRtpSender;
+    screenSender?: RTCRtpSender;
 }
 
 interface PeerEventHandler {
@@ -41,6 +44,7 @@ export class PeerManager {
         };
 
     private localMuted = false;
+    private localVideoOn = false;
     private localAudioLevel = 0;
     private outputDeviceId: string = 'default';
 
@@ -101,6 +105,14 @@ export class PeerManager {
             const peer = this.peers.get(msg.from!);
             if (peer) {
                 peer.isMuted = (msg.payload as { isMuted: boolean }).isMuted;
+                this.emitPeerUpdated(peer);
+            }
+        });
+
+        this.signaling.on('video-status', (msg) => {
+            const peer = this.peers.get(msg.from!);
+            if (peer) {
+                peer.isVideoOn = (msg.payload as { isVideoOn: boolean }).isVideoOn;
                 this.emitPeerUpdated(peer);
             }
         });
@@ -199,11 +211,16 @@ export class PeerManager {
         this.peers.forEach((peer, id) => {
             peer.connection.close();
             peer.audioElement.remove();
+            if (peer.videoElement) {
+                peer.videoElement.remove();
+            }
         });
         this.peers.clear();
 
-        // Stop local audio
+        // Stop local audio and video
         this.audioProcessor.stopLocalStream();
+        this.videoProcessor.stopCamera();
+        this.videoProcessor.stopScreenShare();
 
         // Disconnect from signaling
         this.signaling.disconnect();
@@ -228,28 +245,38 @@ export class PeerManager {
             connection,
             audioElement,
             isMuted: false,
+            isVideoOn: false,
             audioLevel: 0,
         };
         this.peers.set(peerId, peer);
 
-        // Add local tracks to connection
-        const localStream = this.audioProcessor.getLocalStream();
-        if (localStream) {
-            localStream.getTracks().forEach(track => {
-                connection.addTrack(track, localStream);
+        // Add local audio tracks to connection
+        const localAudioStream = this.audioProcessor.getLocalStream();
+        if (localAudioStream) {
+            localAudioStream.getTracks().forEach(track => {
+                connection.addTrack(track, localAudioStream);
+            });
+        }
+
+        // Add local video tracks if enabled
+        const localVideoStream = this.videoProcessor.getLocalCameraStream();
+        if (localVideoStream) {
+            localVideoStream.getTracks().forEach(track => {
+                const sender = connection.addTrack(track, localVideoStream);
+                peer.cameraSender = sender;
             });
         }
 
         // Handle incoming tracks
         connection.ontrack = (event) => {
             const stream = event.streams[0];
-            // If audio, attach to audio element (for legacy audio support)
-            // But if we have video, the UI might want to handle it differently
-            audioElement.srcObject = stream;
-
-            if (stream.getVideoTracks().length > 0) {
+            
+            if (event.track.kind === 'audio') {
+                audioElement.srcObject = stream;
+            } else if (event.track.kind === 'video') {
                 console.log(`[PeerManager] Remote video track received from ${peerName}`);
-                // Emit event for UI to handle (e.g., show video element)
+                
+                // Store video element reference if needed or just emit event
                 this.eventHandlers.remoteTrackAdded.forEach(handler => handler(peerId, stream));
             }
         };
@@ -280,6 +307,61 @@ export class PeerManager {
         }
     }
 
+    public async setVideoEnabled(enabled: boolean): Promise<void> {
+        if (this.localVideoOn === enabled) return;
+
+        try {
+            if (enabled) {
+                const stream = await this.videoProcessor.startCamera();
+                const videoTrack = stream.getVideoTracks()[0];
+                this.localVideoOn = true;
+
+                // Add track to all active connections
+                const promises: Promise<void>[] = [];
+                this.peers.forEach(peer => {
+                    try {
+                        const sender = peer.connection.addTrack(videoTrack, stream);
+                        peer.cameraSender = sender;
+
+                        // Trigger renegotiation
+                        promises.push(peer.connection.createOffer().then(async offer => {
+                            await peer.connection.setLocalDescription(offer);
+                            this.signaling.sendOffer(peer.id, offer);
+                        }));
+                    } catch (err) {
+                        console.error(`Failed to add video track to peer ${peer.id}:`, err);
+                    }
+                });
+                await Promise.all(promises);
+            } else {
+                this.videoProcessor.stopCamera();
+                this.localVideoOn = false;
+
+                // Remove track from all active connections
+                const promises: Promise<void>[] = [];
+                this.peers.forEach(peer => {
+                    if (peer.cameraSender) {
+                        try {
+                            peer.connection.removeTrack(peer.cameraSender);
+                        } catch (e) { console.error(e); }
+                        peer.cameraSender = undefined;
+
+                        // Trigger renegotiation
+                        promises.push(peer.connection.createOffer().then(async offer => {
+                            await peer.connection.setLocalDescription(offer);
+                            this.signaling.sendOffer(peer.id, offer);
+                        }));
+                    }
+                });
+                await Promise.all(promises);
+            }
+            this.signaling.sendVideoStatus(enabled);
+        } catch (error) {
+            console.error('Failed to toggle video:', error);
+            throw error;
+        }
+    }
+
     public async startScreenShare(sourceId: string, options?: { width: number, height: number, frameRate: number }): Promise<void> {
         try {
             const stream = await this.videoProcessor.startScreenShare(sourceId, options);
@@ -288,11 +370,8 @@ export class PeerManager {
             // Add track to all active connections
             this.peers.forEach(peer => {
                 try {
-                    // Use a separate stream or the same stream? 
-                    // Usually adding track to the same connection is fine.
-                    // We need to pass the stream so the receiver groups them.
                     const sender = peer.connection.addTrack(videoTrack, stream);
-                    peer.videoSender = sender;
+                    peer.screenSender = sender;
 
                     // Trigger renegotiation
                     peer.connection.createOffer().then(async offer => {
@@ -312,11 +391,11 @@ export class PeerManager {
     public stopScreenShare(): void {
         this.videoProcessor.stopScreenShare();
         this.peers.forEach(peer => {
-            if (peer.videoSender) {
+            if (peer.screenSender) {
                 try {
-                    peer.connection.removeTrack(peer.videoSender);
+                    peer.connection.removeTrack(peer.screenSender);
                 } catch (e) { console.error(e); }
-                peer.videoSender = undefined;
+                peer.screenSender = undefined;
 
                 // Trigger renegotiation
                 peer.connection.createOffer().then(async offer => {
@@ -331,11 +410,18 @@ export class PeerManager {
         return this.videoProcessor.getLocalScreenStream();
     }
 
+    public getLocalCameraStream(): MediaStream | null {
+        return this.videoProcessor.getLocalCameraStream();
+    }
+
     private removePeer(peerId: string): void {
         const peer = this.peers.get(peerId);
         if (peer) {
             peer.connection.close();
             peer.audioElement.remove();
+            if (peer.videoElement) {
+                peer.videoElement.remove();
+            }
             this.peers.delete(peerId);
             this.emitPeerLeft(peer);
         }
@@ -351,6 +437,10 @@ export class PeerManager {
         return this.localMuted;
     }
 
+    public isVideoEnabled(): boolean {
+        return this.localVideoOn;
+    }
+
     public getLocalAudioLevel(): number {
         return this.localAudioLevel;
     }
@@ -363,6 +453,7 @@ export class PeerManager {
             id: this.signaling.getUserId(),
             name: 'You',
             isMuted: this.localMuted,
+            isVideoOn: this.localVideoOn,
             isSpeaking: this.localAudioLevel > 0.1,
             audioLevel: this.localAudioLevel,
         });
@@ -373,6 +464,7 @@ export class PeerManager {
                 id: peer.id,
                 name: peer.name,
                 isMuted: peer.isMuted,
+                isVideoOn: peer.isVideoOn,
                 isSpeaking: peer.audioLevel > 0.1,
                 audioLevel: peer.audioLevel,
             });
@@ -410,6 +502,7 @@ export class PeerManager {
             id: peer.id,
             name: peer.name,
             isMuted: peer.isMuted,
+            isVideoOn: peer.isVideoOn,
             isSpeaking: peer.audioLevel > 0.1,
             audioLevel: peer.audioLevel,
         };
