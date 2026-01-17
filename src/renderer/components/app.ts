@@ -172,7 +172,14 @@ export class App {
 
             <!-- Center Content: Stream/Chat -->
             <div class="center-content">
-                ${this.renderVideoGrid()}
+                <div id="stream-area">
+                    ${this.renderVideoGrid()}
+                </div>
+                <div class="stream-controls-bar">
+                    <button class="btn ${this.isSharingScreen ? 'btn-danger' : 'btn-primary'} btn-lg" id="share-screen" ${!this.isConnected ? 'disabled' : ''}>
+                        ${ICONS.screen} ${this.isSharingScreen ? 'STOP SHARING' : 'SHARE SCREEN'}
+                    </button>
+                </div>
             </div>
 
           <!-- Audio Controls Sidebar -->
@@ -260,9 +267,6 @@ export class App {
                 </button>
                 <button class="btn ${this.isTestingInput ? 'btn-primary' : 'btn-secondary'} btn-sm" id="test-audio">
                   ${ICONS.speaker} ${this.isTestingInput ? 'STOP TEST' : 'TEST INPUT'}
-                </button>
-                <button class="btn ${this.isSharingScreen ? 'btn-danger' : 'btn-secondary'} btn-sm" id="share-screen" ${!this.isConnected ? 'disabled' : ''}>
-                    ${ICONS.screen} ${this.isSharingScreen ? 'STOP SHARE' : 'SHARE SCREEN'}
                 </button>
               </div>
             </div>
@@ -625,8 +629,11 @@ export class App {
 
     if (centerContent) {
       // Update Center Content (Stream)
-      centerContent.innerHTML = this.renderVideoGrid();
-      this.postRender(); // Re-attach listeners for new elements
+      const streamArea = centerContent.querySelector('#stream-area');
+      if (streamArea) {
+        streamArea.innerHTML = this.renderVideoGrid();
+        this.postRender(); // Re-attach listeners for new elements
+      }
     }
   }
 
