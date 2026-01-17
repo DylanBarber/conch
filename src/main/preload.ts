@@ -21,6 +21,7 @@ declare global {
         electronAPI: {
             getSettings: () => Promise<AppSettings>;
             setSettings: (settings: Partial<AppSettings>) => Promise<AppSettings>;
+            getScreenSources: () => Promise<Electron.DesktopCapturerSource[]>;
             platform: NodeJS.Platform;
         };
     }

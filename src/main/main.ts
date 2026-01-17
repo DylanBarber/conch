@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer } from 'electron';
 import * as path from 'path';
 import { getSettings, setSettings } from './settings-store';
 import { IPC_CHANNELS } from '../shared/types';
@@ -46,6 +46,22 @@ function setupIpcHandlers(): void {
 
     ipcMain.handle(IPC_CHANNELS.SET_SETTINGS, (_, settings) => {
         return setSettings(settings);
+    });
+
+    ipcMain.handle('get-screen-sources', async () => {
+        const sources = await desktopCapturer.getSources({
+            types: ['window', 'screen'],
+            thumbnailSize: { width: 300, height: 300 },
+            fetchWindowIcons: true
+        });
+
+        return sources.map(source => ({
+            id: source.id,
+            name: source.name,
+            thumbnail: source.thumbnail.toDataURL(),
+            display_id: source.display_id,
+            appIcon: source.appIcon ? source.appIcon.toDataURL() : null
+        }));
     });
 }
 

@@ -3,6 +3,7 @@ import { SettingsComponent } from './settings';
 import { AppSettings, Participant } from '../../shared/types';
 import { AudioDevice } from '../webrtc/audio-processor';
 import { SoundManager } from '../webrtc/sound-manager';
+import { ScreenPickerComponent } from './screen-picker';
 
 // Icons
 const ICONS = {
@@ -16,6 +17,7 @@ const ICONS = {
   check: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`,
   copy: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>`,
   trash: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>`,
+  screen: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>`,
 };
 
 export class App {
@@ -37,12 +39,16 @@ export class App {
   private audioLevelInterval: number | null = null;
   private settingsComponent: SettingsComponent | null = null;
   private soundManager: SoundManager;
+  private screenPicker: ScreenPickerComponent;
   private isTestingInput = false;
+  private isSharingScreen = false;
+  private activeVideoStreams: Map<string, MediaStream> = new Map();
 
   constructor(container: HTMLElement) {
     this.container = container;
     this.peerManager = new PeerManager();
     this.soundManager = new SoundManager();
+    this.screenPicker = new ScreenPickerComponent(container);
     this.setupPeerManagerListeners();
   }
 
@@ -63,10 +69,22 @@ export class App {
         this.soundManager.playConnectSound();
       } else if (this.isConnected) {
         this.isConnected = false;
+        this.isSharingScreen = false;
+        this.activeVideoStreams.clear();
         this.soundManager.playDisconnectSound();
         this.addLog('// Disconnected from server', 'error');
         this.render();
       }
+    });
+    this.peerManager.on('remoteTrackAdded', (participantId, stream) => {
+      this.activeVideoStreams.set(participantId, stream);
+      this.addLog(`Remote video received from participant ${participantId.substring(0, 6)}...`);
+      this.render();
+      // Handle stream ending?
+      stream.onremovetrack = () => {
+        this.activeVideoStreams.delete(participantId);
+        this.render();
+      };
     });
   }
 
@@ -137,7 +155,16 @@ export class App {
             <!-- Connected Users Panel -->
             <div class="connected-users-panel">
               <div class="panel-header">CONNECTED USERS</div>
-              ${this.renderUsersGrid()}
+              ${this.renderVideoGrid()}
+              <div class="users-grid">
+                ${this.participants.length === 0 ? `
+                  <div class="empty-state">
+                    ${ICONS.users}
+                    <p>No users connected</p>
+                    <span class="subtitle">Join a room to start talking</span>
+                  </div>
+                ` : this.participants.map(p => this.renderUserCard(p)).join('')}
+              </div>
             </div>
           </div>
 
@@ -227,6 +254,9 @@ export class App {
                 <button class="btn ${this.isTestingInput ? 'btn-primary' : 'btn-secondary'} btn-sm" id="test-audio">
                   ${ICONS.speaker} ${this.isTestingInput ? 'STOP TEST' : 'TEST INPUT'}
                 </button>
+                <button class="btn ${this.isSharingScreen ? 'btn-danger' : 'btn-secondary'} btn-sm" id="share-screen" ${!this.isConnected ? 'disabled' : ''}>
+                    ${ICONS.screen} ${this.isSharingScreen ? 'STOP SHARE' : 'SHARE SCREEN'}
+                </button>
               </div>
             </div>
           </div>
@@ -268,32 +298,52 @@ export class App {
     `;
 
     this.attachEventListeners();
+    this.postRender();
   }
 
-  private renderUsersGrid(): string {
-    if (this.participants.length === 0) {
-      return `
-        <div class="empty-state">
-          ${ICONS.users}
-          <p>No users connected</p>
-          <p class="subtitle">Join a channel to start chatting</p>
-        </div>
-      `;
+  private renderVideoGrid(): string {
+    const videos = [];
+
+    // Local screen share video
+    if (this.isSharingScreen) {
+      videos.push(`
+            <div class="video-container local-screen">
+                <video id="local-screen-video" autoplay muted playsinline></video>
+                <div class="video-label">Your Screen</div>
+            </div>
+        `);
     }
 
+    // Remote video streams
+    this.activeVideoStreams.forEach((stream, participantId) => {
+      const participant = this.participants.find(p => p.id === participantId);
+      if (participant) {
+        videos.push(`
+                <div class="video-container remote-video">
+                    <video id="video-${participantId}" autoplay playsinline></video>
+                    <div class="video-label">${participant.name}'s Screen</div>
+                </div>
+            `);
+      }
+    });
+
+    if (videos.length === 0) {
+      return ''; // No videos to display
+    }
+
+    return `<div class="video-grid">${videos.join('')}</div>`;
+  }
+
+  private renderUserCard(p: Participant): string {
     return `
-      <div class="users-grid">
-        ${this.participants.map(p => `
-          <div class="user-card ${p.isSpeaking ? 'speaking' : ''}">
-            <div class="user-avatar">${this.getInitials(p.name)}</div>
-            <div class="user-info">
-              <div class="user-name">${p.name}</div>
-              <div class="user-status ${p.isMuted ? 'muted' : ''}">
-                ${p.isMuted ? 'Muted' : (p.isSpeaking ? 'Speaking' : 'Connected')}
-              </div>
-            </div>
+      <div class="user-card ${p.isSpeaking ? 'speaking' : ''}">
+        <div class="user-avatar">${this.getInitials(p.name)}</div>
+        <div class="user-info">
+          <div class="user-name">${p.name}</div>
+          <div class="user-status ${p.isMuted ? 'muted' : ''}">
+            ${p.isMuted ? 'Muted' : (p.isSpeaking ? 'Speaking' : 'Connected')}
           </div>
-        `).join('')}
+        </div>
       </div>
     `;
   }
@@ -304,6 +354,24 @@ export class App {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
+  }
+
+  private postRender() {
+    // Attach video streams to elements
+    if (this.isSharingScreen) {
+      const video = document.getElementById('local-screen-video') as HTMLVideoElement;
+      const stream = this.peerManager.getLocalScreenStream();
+      if (video && stream) {
+        video.srcObject = stream;
+      }
+    }
+
+    this.activeVideoStreams.forEach((stream, id) => {
+      const video = document.getElementById(`video-${id}`) as HTMLVideoElement;
+      if (video) {
+        video.srcObject = stream;
+      }
+    });
   }
 
   private getDeviceLabel(deviceId: string): string {
@@ -411,6 +479,34 @@ export class App {
       }
     });
 
+    // Share Screen
+    document.getElementById('share-screen')?.addEventListener('click', async () => {
+      if (!this.isConnected) return;
+
+      if (this.isSharingScreen) {
+        // Stop sharing
+        this.peerManager.stopScreenShare();
+        this.isSharingScreen = false;
+        this.render();
+      } else {
+        // Start sharing
+        try {
+          const options = await this.screenPicker.show();
+          if (options) {
+            await this.peerManager.startScreenShare(options.sourceId, {
+              width: options.width,
+              height: options.height,
+              frameRate: options.frameRate
+            });
+            this.isSharingScreen = true;
+            this.render();
+          }
+        } catch (error) {
+          this.addLog(`Failed to share screen: ${error}`, 'error');
+        }
+      }
+    });
+
     // Copy log
     document.getElementById('copy-log')?.addEventListener('click', () => {
       navigator.clipboard.writeText(this.logEntries.join('\n'));
@@ -474,7 +570,23 @@ export class App {
       const header = usersPanel.querySelector('.panel-header');
       usersPanel.innerHTML = '';
       if (header) usersPanel.appendChild(header.cloneNode(true));
-      usersPanel.insertAdjacentHTML('beforeend', this.renderUsersGrid());
+
+      usersPanel.insertAdjacentHTML('beforeend', this.renderVideoGrid());
+
+      const usersHtml = `
+        <div class="users-grid">
+            ${this.participants.length === 0 ? `
+              <div class="empty-state">
+                ${ICONS.users}
+                <p>No users connected</p>
+                <span class="subtitle">Join a room to start talking</span>
+              </div>
+            ` : this.participants.map(p => this.renderUserCard(p)).join('')}
+        </div>
+      `;
+
+      usersPanel.insertAdjacentHTML('beforeend', usersHtml);
+      this.postRender();
     }
   }
 

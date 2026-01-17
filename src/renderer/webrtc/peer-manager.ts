@@ -1,5 +1,6 @@
 import { SignalingClient } from './signaling';
 import { AudioProcessor } from './audio-processor';
+import { VideoProcessor } from './video-processor';
 import { TurnServer, Participant, SignalingMessage } from '../../shared/types';
 
 interface PeerConnection {
@@ -9,13 +10,17 @@ interface PeerConnection {
     audioElement: HTMLAudioElement;
     isMuted: boolean;
     audioLevel: number;
+    videoSender?: RTCRtpSender; // Track the video sender for removal
 }
 
-type PeerEventHandler = (participant: Participant) => void;
+interface PeerEventHandler {
+    (participant: Participant): void;
+}
 
 export class PeerManager {
     private signaling: SignalingClient;
     private audioProcessor: AudioProcessor;
+    private videoProcessor: VideoProcessor;
     private peers: Map<string, PeerConnection> = new Map();
     private rtcConfig: RTCConfiguration = {
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -26,11 +31,13 @@ export class PeerManager {
         peerLeft: PeerEventHandler[];
         peerUpdated: PeerEventHandler[];
         connectionStateChanged: ((connected: boolean) => void)[];
+        remoteTrackAdded: ((participantId: string, stream: MediaStream) => void)[];
     } = {
             peerJoined: [],
             peerLeft: [],
             peerUpdated: [],
             connectionStateChanged: [],
+            remoteTrackAdded: [],
         };
 
     private localMuted = false;
@@ -40,6 +47,7 @@ export class PeerManager {
     constructor() {
         this.signaling = new SignalingClient();
         this.audioProcessor = new AudioProcessor();
+        this.videoProcessor = new VideoProcessor();
         this.setupSignalingHandlers();
     }
 
@@ -234,7 +242,16 @@ export class PeerManager {
 
         // Handle incoming tracks
         connection.ontrack = (event) => {
-            audioElement.srcObject = event.streams[0];
+            const stream = event.streams[0];
+            // If audio, attach to audio element (for legacy audio support)
+            // But if we have video, the UI might want to handle it differently
+            audioElement.srcObject = stream;
+
+            if (stream.getVideoTracks().length > 0) {
+                console.log(`[PeerManager] Remote video track received from ${peerName}`);
+                // Emit event for UI to handle (e.g., show video element)
+                this.eventHandlers.remoteTrackAdded.forEach(handler => handler(peerId, stream));
+            }
         };
 
         // Handle ICE candidates
@@ -261,6 +278,57 @@ export class PeerManager {
             await connection.setLocalDescription(offer);
             this.signaling.sendOffer(peerId, offer);
         }
+    }
+
+    public async startScreenShare(sourceId: string, options?: { width: number, height: number, frameRate: number }): Promise<void> {
+        try {
+            const stream = await this.videoProcessor.startScreenShare(sourceId, options);
+            const videoTrack = stream.getVideoTracks()[0];
+
+            // Add track to all active connections
+            this.peers.forEach(peer => {
+                try {
+                    // Use a separate stream or the same stream? 
+                    // Usually adding track to the same connection is fine.
+                    // We need to pass the stream so the receiver groups them.
+                    const sender = peer.connection.addTrack(videoTrack, stream);
+                    peer.videoSender = sender;
+
+                    // Trigger renegotiation
+                    peer.connection.createOffer().then(async offer => {
+                        await peer.connection.setLocalDescription(offer);
+                        this.signaling.sendOffer(peer.id, offer);
+                    }).catch(console.error);
+                } catch (err) {
+                    console.error(`Failed to add video track to peer ${peer.id}:`, err);
+                }
+            });
+        } catch (error) {
+            console.error('Failed to start screen share:', error);
+            throw error;
+        }
+    }
+
+    public stopScreenShare(): void {
+        this.videoProcessor.stopScreenShare();
+        this.peers.forEach(peer => {
+            if (peer.videoSender) {
+                try {
+                    peer.connection.removeTrack(peer.videoSender);
+                } catch (e) { console.error(e); }
+                peer.videoSender = undefined;
+
+                // Trigger renegotiation
+                peer.connection.createOffer().then(async offer => {
+                    await peer.connection.setLocalDescription(offer);
+                    this.signaling.sendOffer(peer.id, offer);
+                }).catch(console.error);
+            }
+        });
+    }
+
+    public getLocalScreenStream(): MediaStream | null {
+        return this.videoProcessor.getLocalScreenStream();
     }
 
     private removePeer(peerId: string): void {
@@ -315,6 +383,7 @@ export class PeerManager {
 
     public on(event: 'peerJoined' | 'peerLeft' | 'peerUpdated', handler: PeerEventHandler): void;
     public on(event: 'connectionStateChanged', handler: (connected: boolean) => void): void;
+    public on(event: 'remoteTrackAdded', handler: (participantId: string, stream: MediaStream) => void): void;
     public on(event: string, handler: any): void {
         if (event in this.eventHandlers) {
             (this.eventHandlers as any)[event].push(handler);

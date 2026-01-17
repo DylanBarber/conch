@@ -28,6 +28,14 @@ export interface UserSettings {
     displayName: string;
 }
 
+export interface DesktopCapturerSource {
+    id: string;
+    name: string;
+    thumbnail: string; // Data URL
+    display_id: string;
+    appIcon: string | null;
+}
+
 export interface Participant {
     id: string;
     name: string;
