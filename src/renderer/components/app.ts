@@ -104,7 +104,7 @@ export class App {
         this.addLog(`Remote screen share received from ${p ? p.name : participantId}`);
       }
       
-      this.render();
+      this.updateParticipants();
 
       stream.onremovetrack = () => {
         if (this.activeCameraStreams.get(participantId) === stream) {
@@ -115,8 +115,10 @@ export class App {
         
         if (this.watchingStreamId === participantId) {
           this.watchingStreamId = null;
+          this.render(); // Re-render to switch back to grid
+        } else {
+            this.updateParticipants();
         }
-        this.render();
       };
     });
   }
@@ -154,7 +156,6 @@ export class App {
             <div class="header-subtitle">NEURAL VOICE NETWORK // V2.0</div>
           </div>
           <div class="header-actions">
-            <!-- Header Disconnect Button Removed -->
             <div class="status-badge ${this.isConnected ? 'connected' : 'disconnected'}">
               ${this.isConnected ? 'CONNECTED' : 'DISCONNECTED'}
             </div>
@@ -168,7 +169,6 @@ export class App {
         <div class="main-layout">
             <!-- Left Sidebar: Users & Channel -->
             <div class="left-sidebar">
-                <!-- Voice Channel Panel -->
                 <!-- Saved Servers Panel -->
                 <div class="saved-servers-panel">
                     <div class="panel-header">SAVED SERVERS</div>
@@ -176,11 +176,7 @@ export class App {
                         ${ICONS.plus} ADD A SERVER
                     </button>
                     <div id="saved-servers-list">
-                        ${(this.settings?.savedServers || []).length === 0 ? `
-                            <div class="empty-state" style="padding: 10px;">
-                                <p style="font-size: 11px;">No saved servers</p>
-                            </div>
-                        ` : (this.settings?.savedServers || []).map((s, i) => {
+                        ${(this.settings?.savedServers || []).map((s, i) => {
       const isConnectedToThis = this.isConnected &&
         s.room === this.currentRoom &&
         (!this.settings?.server.signalingUrl || s.signalingUrl === this.settings.server.signalingUrl);
@@ -204,6 +200,11 @@ export class App {
                             </div>
                         `;
     }).join('')}
+                         ${(this.settings?.savedServers || []).length === 0 ? `
+                            <div class="empty-state" style="padding: 10px;">
+                                <p style="font-size: 11px;">No saved servers</p>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
 
@@ -221,10 +222,10 @@ export class App {
                 </div>
             </div>
 
-            <!-- Center Content: Stream/Chat -->
+            <!-- Center Content: Stage -->
             <div class="center-content">
-                <div id="stream-area">
-                    ${this.renderVideoGrid()}
+                <div id="stage-area" class="stage-area">
+                    ${this.renderStage()}
                 </div>
                 <div class="stream-controls-bar">
                     <button class="btn ${this.isSharingScreen ? 'btn-danger' : 'btn-primary'} btn-lg" id="share-screen" ${!this.isConnected ? 'disabled' : ''}>
@@ -370,29 +371,72 @@ export class App {
     this.postRender();
   }
 
-  private renderVideoGrid(): string {
-    // Only show if we are watching a specific stream (Screen Share)
-    if (!this.watchingStreamId) return '';
+  private renderStage(): string {
+    if (!this.isConnected) {
+        return `
+            <div class="empty-state">
+                ${ICONS.logo}
+                <p>Join a server to start</p>
+            </div>
+        `;
+    }
 
-    const stream = this.activeScreenShares.get(this.watchingStreamId);
-    if (!stream) return '';
+    if (this.watchingStreamId) {
+        // Presentation Mode
+        const stream = this.activeScreenShares.get(this.watchingStreamId);
+        if (!stream) {
+             // Fallback if stream lost
+             this.watchingStreamId = null;
+             return this.renderStage(); 
+        }
 
-    const participant = this.participants.find(p => p.id === this.watchingStreamId);
-    const name = participant ? participant.name : 'Unknown User';
+        const presenter = this.participants.find(p => p.id === this.watchingStreamId);
+        const name = presenter ? presenter.name : 'Unknown';
 
-    return `
-        <div class="video-grid single-view">
-            <div class="video-container remote-video full-size">
-                <div class="video-wrapper">
-                  <video id="video-display" autoplay playsinline></video>
-                </div>
-                <div class="video-overlay">
-                    <span>${name}'s Screen</span>
-                    <div class="video-controls">
-                        <button class="btn btn-secondary btn-xs" id="fullscreen-btn">FULL SCREEN</button>
-                        <button class="btn btn-danger btn-xs" id="close-stream">CLOSE</button>
+        return `
+            <div class="stage-presentation">
+                <div class="presentation-screen">
+                    <div class="video-wrapper">
+                         <video id="presentation-video" autoplay playsinline></video>
+                    </div>
+                    <div class="video-overlay">
+                        <span>${name}'s Screen</span>
+                        <div class="video-controls">
+                            <button class="btn btn-secondary btn-xs" id="fullscreen-btn">FULL SCREEN</button>
+                            <button class="btn btn-danger btn-xs" id="close-stream">CLOSE</button>
+                        </div>
                     </div>
                 </div>
+                <div class="presentation-participants">
+                    ${this.participants.map(p => this.renderStageParticipant(p)).join('')}
+                </div>
+            </div>
+        `;
+    } else {
+        // Grid Mode
+        return `
+            <div class="stage-grid">
+                ${this.participants.map(p => this.renderStageParticipant(p)).join('')}
+            </div>
+        `;
+    }
+  }
+
+  private renderStageParticipant(p: Participant): string {
+    const hasCamera = this.activeCameraStreams.has(p.id) || (p.name === 'You' && this.isVideoOn);
+    
+    return `
+        <div class="stage-participant ${p.isSpeaking ? 'speaking' : ''}" id="stage-participant-${p.id}">
+             ${hasCamera ? `
+                <video id="stage-video-${p.id}" autoplay playsinline muted="${p.name === 'You' ? 'true' : 'false'}"></video>
+            ` : `
+                <div class="avatar-container">
+                    <div class="avatar">${this.getInitials(p.name)}</div>
+                </div>
+            `}
+            <div class="name-tag">
+                ${p.isMuted ? ICONS.micOff : ''}
+                <span>${p.name} ${p.name === 'You' ? '(You)' : ''}</span>
             </div>
         </div>
     `;
@@ -401,18 +445,11 @@ export class App {
   private renderUserCard(p: Participant): string {
     const isSharingScreen = this.activeScreenShares.has(p.id);
     const isWatcher = this.watchingStreamId === p.id;
-    const hasCamera = this.activeCameraStreams.has(p.id) || (p.name === 'You' && this.isVideoOn);
 
+    // Sidebar card just shows info now
     return `
       <div class="user-card ${p.isSpeaking ? 'speaking' : ''}">
-        ${hasCamera ? `
-          <div class="user-video-container">
-             <video id="user-video-${p.id}" class="user-video" autoplay playsinline muted="${p.name === 'You' ? 'true' : 'false'}" style="width: 100%; height: 100%; object-fit: cover;"></video>
-          </div>
-        ` : `
-          <div class="user-avatar">${this.getInitials(p.name)}</div>
-        `}
-        
+        <div class="user-avatar">${this.getInitials(p.name)}</div>
         <div class="user-info">
           <div class="user-name">
             ${p.name}
@@ -439,29 +476,25 @@ export class App {
   }
 
   private postRender() {
-    // Attach screen share stream if watching
+    // Attach presentation stream
     if (this.watchingStreamId) {
-      const stream = this.activeScreenShares.get(this.watchingStreamId);
-      const video = document.getElementById('video-display') as HTMLVideoElement;
-      if (video && stream) {
-        video.srcObject = stream;
-      }
+        const stream = this.activeScreenShares.get(this.watchingStreamId);
+        const video = document.getElementById('presentation-video') as HTMLVideoElement;
+        if (video && stream) {
+            video.srcObject = stream;
+        }
     }
 
-    // Attach camera streams
+    // Attach participant streams in Stage
     this.participants.forEach(p => {
-        const videoEl = document.getElementById(`user-video-${p.id}`) as HTMLVideoElement;
+        const videoEl = document.getElementById(`stage-video-${p.id}`) as HTMLVideoElement;
         if (videoEl) {
             if (p.name === 'You' && this.isVideoOn) {
                 const stream = this.peerManager.getLocalCameraStream();
-                if (stream) {
-                    videoEl.srcObject = stream;
-                }
+                if (stream) videoEl.srcObject = stream;
             } else if (this.activeCameraStreams.has(p.id)) {
                 const stream = this.activeCameraStreams.get(p.id);
-                if (stream) {
-                    videoEl.srcObject = stream;
-                }
+                if (stream) videoEl.srcObject = stream;
             }
         }
     });
@@ -478,7 +511,7 @@ export class App {
           } else {
             this.watchingStreamId = id;
           }
-          this.updateParticipants(); // Re-render users/grid
+          this.render(); // Re-render users/grid
         }
       });
     });
@@ -486,12 +519,12 @@ export class App {
     // Close stream button
     document.getElementById('close-stream')?.addEventListener('click', () => {
       this.watchingStreamId = null;
-      this.updateParticipants();
+      this.render();
     });
 
     // Full Screen button
     document.getElementById('fullscreen-btn')?.addEventListener('click', () => {
-      const videoContainer = document.querySelector('.video-container.remote-video');
+      const videoContainer = document.querySelector('.presentation-screen');
       if (videoContainer) {
         if (!document.fullscreenElement) {
           videoContainer.requestFullscreen().catch(err => {
@@ -744,33 +777,24 @@ export class App {
 
   private updateParticipants(): void {
     this.participants = this.peerManager.getParticipants();
-    const usersPanel = document.querySelector('.connected-users-panel');
-    const centerContent = document.querySelector('.center-content');
-
-    if (usersPanel) {
-      // Update User List in Left Sidebar
-      const usersGrid = usersPanel.querySelector('.users-grid');
-      if (usersGrid) {
-        usersGrid.innerHTML = this.participants.length === 0 ? `
-                <div class="empty-state">
-                    ${ICONS.users}
-                    <p>No users connected</p>
-                </div>
-            ` : this.participants.map(p => this.renderUserCard(p)).join('');
-      }
-    }
-
-    if (centerContent) {
-      // Update Center Content (Stream)
-      const streamArea = centerContent.querySelector('#stream-area');
-      if (streamArea) {
-        streamArea.innerHTML = this.renderVideoGrid();
-        this.postRender(); // Re-attach listeners for new elements
-      }
-    }
     
-    // Also re-attach video elements in sidebar if needed (postRender handles both)
-    this.postRender();
+    // Update Sidebar
+    const usersPanel = document.querySelector('.connected-users-panel .users-grid');
+    if (usersPanel) {
+         usersPanel.innerHTML = this.participants.length === 0 ? `
+            <div class="empty-state">
+                ${ICONS.users}
+                <p>No users connected</p>
+            </div>
+        ` : this.participants.map(p => this.renderUserCard(p)).join('');
+    }
+
+    // Update Stage
+    const stageArea = document.getElementById('stage-area');
+    if (stageArea) {
+        stageArea.innerHTML = this.renderStage();
+        this.postRender();
+    }
   }
 
 
