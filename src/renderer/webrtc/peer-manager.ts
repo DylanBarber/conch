@@ -129,6 +129,37 @@ export class PeerManager {
         });
     }
 
+    public async setInputDevice(deviceId: string): Promise<void> {
+        try {
+            console.log(`[PeerManager] Switching input device to ${deviceId}`);
+            // 1. Start new stream
+            await this.audioProcessor.startLocalStream(deviceId);
+            const newStream = this.audioProcessor.getLocalStream();
+
+            if (!newStream) {
+                throw new Error('Failed to get new stream');
+            }
+
+            const newAudioTrack = newStream.getAudioTracks()[0];
+
+            // 2. Replace track for all existing peers
+            const replacePromises: Promise<void>[] = [];
+            this.peers.forEach(peer => {
+                const sender = peer.connection.getSenders().find(s => s.track?.kind === 'audio');
+                if (sender) {
+                    console.log(`[PeerManager] Replacing track for peer ${peer.id}`);
+                    replacePromises.push(sender.replaceTrack(newAudioTrack));
+                }
+            });
+
+            await Promise.all(replacePromises);
+            console.log('[PeerManager] Input device switched successfully');
+        } catch (error) {
+            console.error('[PeerManager] Failed to switch input device:', error);
+            throw error;
+        }
+    }
+
     public async connect(signalingUrl: string, roomId: string, userName: string): Promise<void> {
         this.signaling.setUserName(userName);
 

@@ -15,11 +15,14 @@ export class AudioProcessor {
     // Audio level monitoring
     private audioLevelCallback: ((level: number) => void) | null = null;
     private audioLevelInterval: number | null = null;
+    private isTestingInput = false;
 
     constructor() { }
 
     public async initialize(): Promise<void> {
         this.audioContext = new AudioContext();
+        const supported = navigator.mediaDevices.getSupportedConstraints();
+        console.log('[AudioProcessor] Supported constraints:', supported);
     }
 
     public async getAudioDevices(): Promise<AudioDevice[]> {
@@ -43,6 +46,9 @@ export class AudioProcessor {
 
     public async startLocalStream(inputDeviceId?: string): Promise<MediaStream> {
         try {
+            // Stop existing stream if any
+            this.stopLocalStream();
+
             const constraints: MediaStreamConstraints = {
                 audio: {
                     deviceId: inputDeviceId ? { exact: inputDeviceId } : undefined,
@@ -53,6 +59,7 @@ export class AudioProcessor {
                 video: false,
             };
 
+            console.log('[AudioProcessor] Starting stream with constraints:', constraints);
             this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
 
             // Set up audio processing chain
@@ -100,7 +107,12 @@ export class AudioProcessor {
             this.localStream.getAudioTracks().forEach(track => {
                 track.applyConstraints({
                     noiseSuppression: enabled,
-                }).catch(err => console.error('Failed to apply noise suppression:', err));
+                })
+                    .then(() => {
+                        console.log(`[AudioProcessor] Applied noise suppression: ${enabled}`);
+                        console.log('[AudioProcessor] Track settings:', track.getSettings());
+                    })
+                    .catch(err => console.error('Failed to apply noise suppression:', err));
             });
         }
     }
@@ -129,9 +141,31 @@ export class AudioProcessor {
 
     public setOutputDevice(audioElement: HTMLAudioElement, deviceId: string): Promise<void> {
         if ('setSinkId' in audioElement) {
+            console.log(`[AudioProcessor] Setting output device to ${deviceId}`);
             return (audioElement as any).setSinkId(deviceId);
         }
+        console.warn('[AudioProcessor] setSinkId not supported');
         return Promise.reject(new Error('setSinkId not supported'));
+    }
+
+    public toggleInputTest(enabled: boolean): void {
+        if (!this.gainNode || !this.audioContext) return;
+
+        if (enabled) {
+            // Connect gain node (post-processing) to destination for loopback
+            this.gainNode.connect(this.audioContext.destination);
+            this.isTestingInput = true;
+        } else {
+            // Disconnect from destination
+            try {
+                this.gainNode.disconnect(this.audioContext.destination);
+            } catch (e) {
+                // Ignore if not connected
+            }
+            // Reconnect to analyser (disconnect removes all connections)
+            this.gainNode.connect(this.analyserNode!);
+            this.isTestingInput = false;
+        }
     }
 
     public onAudioLevel(callback: (level: number) => void): void {

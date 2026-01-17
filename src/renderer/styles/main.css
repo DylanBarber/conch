@@ -393,6 +393,7 @@ body {
 
 .slider {
     -webkit-appearance: none;
+    appearance: none;
     width: 100%;
     height: 4px;
     border-radius: var(--radius-full);
@@ -484,6 +485,7 @@ body {
 .form-select {
     cursor: pointer;
     appearance: none;
+    -webkit-appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2300d4aa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 8px center;
@@ -521,42 +523,72 @@ body {
     border: none;
     border-radius: var(--radius-md);
     font-family: var(--font-family);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
+    /* Matched to previous btn-sm size for consistency if needed, or stick to sm */
     font-weight: 600;
     cursor: pointer;
-    transition: all var(--transition-fast);
     text-transform: uppercase;
+    transition: transform 0.05s ease, box-shadow 0.05s ease;
+    position: relative;
 }
 
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    box-shadow: none !important;
+    transform: none !important;
 }
 
 .btn-primary {
     background: var(--color-accent-primary);
     color: var(--color-bg-primary);
+    box-shadow: 2px 2px 0 #00a080;
 }
 
 .btn-primary:hover:not(:disabled) {
     background: var(--color-accent-secondary);
-    box-shadow: 0 0 16px var(--color-accent-glow);
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #00a080;
+}
+
+.btn-primary:active:not(:disabled) {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 #00a080;
 }
 
 .btn-secondary {
     background: var(--color-bg-tertiary);
     color: var(--color-text-primary);
     border: 1px solid var(--color-border);
+    box-shadow: 2px 2px 0 var(--color-bg-elevated);
 }
 
 .btn-secondary:hover:not(:disabled) {
     border-color: var(--color-accent-primary);
     color: var(--color-accent-primary);
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-bg-elevated);
+}
+
+.btn-secondary:active:not(:disabled) {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 var(--color-bg-elevated);
 }
 
 .btn-danger {
     background: var(--color-error);
     color: white;
+    box-shadow: 2px 2px 0 #cc0033;
+}
+
+.btn-danger:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #cc0033;
+}
+
+.btn-danger:active:not(:disabled) {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 #cc0033;
 }
 
 .btn-sm {
